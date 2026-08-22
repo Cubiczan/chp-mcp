@@ -96,8 +96,10 @@ claude mcp add chp -- npx -y @cubiczan/chp-mcp
 |----------------|------|
 | [`@cubiczan/chp`](https://www.npmjs.com/package/@cubiczan/chp) | Profile B library (this server’s dependency) |
 | [`consensus-hardening-protocol`](https://pypi.org/project/consensus-hardening-protocol/) | Profile A + normative spec |
-| [agent-conductor](https://github.com/icohangar-ops/agent-conductor) | Full MCP: contracts, skills, Profile A gates |
-| [cubiczan-chp](https://github.com/icohangar-ops/cubiczan-chp) | Source for `@cubiczan/chp` |
+| [`@cubiczan/agent-conductor`](https://www.npmjs.com/package/@cubiczan/agent-conductor) | Full MCP: contracts, skills, Profile A gates |
+| [`@cubiczan/governed-mcp-gateway`](https://www.npmjs.com/package/@cubiczan/governed-mcp-gateway) | HTTP MCP control plane |
+| [`@cubiczan/codesentinel-mcp`](https://www.npmjs.com/package/@cubiczan/codesentinel-mcp) | Codebase health MCP |
+| [`cubiczan-resilience`](https://pypi.org/project/cubiczan-resilience/) / [`@cubiczan/resilience`](https://www.npmjs.com/package/@cubiczan/resilience) | Shared retry / timeout / audit primitives |
 
 ## Licence
 
