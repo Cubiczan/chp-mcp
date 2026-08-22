@@ -1,15 +1,16 @@
 {
   "name": "@cubiczan/chp-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server for CHP Profile B \u2014 evaluate_spend_gate and approve_spend over @cubiczan/chp",
   "mcpName": "io.github.icohangar-ops/chp-mcp",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "chp-mcp": "./dist/index.js"
+    "chp-mcp": "./bin/chp-mcp.js"
   },
   "files": [
     "dist",
+    "bin",
     "README.md",
     "LICENSE"
   ],
