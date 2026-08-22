@@ -42,10 +42,11 @@ echo "Publishing stdio MCPB -> ${QUALIFIED_NAME}"
 echo "  bundle: ${BUNDLE}"
 if ! smithery mcp publish "${BUNDLE}" -n "${QUALIFIED_NAME}"; then
   echo
-  echo "If you saw 'Namespace not found':"
-  echo "  smithery namespace create icohangar-ops   # once, to match GitHub org"
-  echo "  smithery namespace use icohangar-ops"
-  echo "  SMITHERY_QUALIFIED_NAME=icohangar-ops/chp-mcp npm run smithery:publish"
+  echo "If 'Namespace not found':"
+  echo "  smithery namespace create icohangar-ops && smithery namespace use icohangar-ops"
+  echo
+  echo "If 'No values to set' (smithery-ai/cli#770):"
+  echo "  ensure manifest.json has \"tools\": [] then re-run npm run mcpb:pack"
   exit 1
 fi
 
