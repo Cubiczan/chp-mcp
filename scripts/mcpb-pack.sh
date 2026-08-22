@@ -6,10 +6,13 @@ cd "$(dirname "$0")/.."
 VERSION="$(node -p "require('./package.json').version")"
 OUT="dist/chp-mcp-${VERSION}.mcpb"
 
+echo "==> install (incl. dev deps for tsc)"
+npm ci --no-audit --no-fund
+
 echo "==> build"
 npm run build
 
-echo "==> production deps only"
+echo "==> production deps only (smaller bundle)"
 npm ci --omit=dev --no-audit --no-fund
 
 echo "==> validate manifest"
@@ -29,9 +32,14 @@ grep -q '"name":"chp-mcp"' /tmp/chp-mcpb-smoke.ndjson
 grep -q 'evaluate_spend_gate' /tmp/chp-mcpb-smoke.ndjson
 echo "OK: ${OUT} ($(du -h "${OUT}" | cut -f1))"
 
+NS="$(smithery namespace show 2>/dev/null | awk '/Namespace:/ {print $2}' || true)"
 echo
 echo "Smithery publish (https://smithery.ai/docs/concepts/cli):"
-echo "  npm install -g smithery@latest"
 echo "  smithery auth login"
-echo "  npm run smithery:publish"
-echo "  # or: smithery mcp publish ${OUT} -n icohangar-ops/chp-mcp"
+if [[ -z "${SMITHERY_QUALIFIED_NAME:-}" ]]; then
+  echo "  # your namespace is: ${NS:-<run smithery namespace show>}"
+  echo "  # claim org namespace once: smithery namespace create icohangar-ops"
+  echo "  SMITHERY_QUALIFIED_NAME=${NS:-sam-ati8}/chp-mcp npm run smithery:publish"
+else
+  echo "  npm run smithery:publish"
+fi

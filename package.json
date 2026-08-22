@@ -6,7 +6,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "chp-mcp": "bin/chp-mcp.js"
+    "chp-mcp": "./dist/index.js"
   },
   "files": [
     "dist",
@@ -21,7 +21,8 @@
     "prepublishOnly": "npm run build",
     "mcpb:pack": "bash scripts/mcpb-pack.sh",
     "mcpb:validate": "mcpb validate manifest.json",
-    "smithery:publish": "bash scripts/smithery-publish-mcpb.sh"
+    "smithery:publish": "bash scripts/smithery-publish-mcpb.sh",
+    "smithery:agent-token": "bash scripts/smithery-agent-token.sh"
   },
   "keywords": [
     "mcp",
