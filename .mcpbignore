@@ -1,0 +1,17 @@
+.git/
+.github/
+src/
+scripts/
+*.md
+!README.md
+PUBLISH.md
+Dockerfile
+.dockerignore
+glama.json
+server.json
+tsconfig.json
+package-lock.json
+node_modules/.package-lock.json
+node_modules/typescript/
+node_modules/@types/
+node_modules/tsx/

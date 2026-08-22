@@ -1,0 +1,21 @@
+{
+  "manifest_version": "0.2",
+  "name": "@cubiczan/chp-mcp",
+  "version": "0.1.2",
+  "description": "Spend approval gate for AI agents — enforce budget limits, per-asset caps and human-in-the-loop thresholds before an agent moves money, with a signed audit hash.",
+  "author": {
+    "name": "Shyam Desigan <sam@cubiczan.com>"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "./dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/./dist/index.js"
+      ],
+      "env": {}
+    }
+  },
+  "license": "MIT"
+}
