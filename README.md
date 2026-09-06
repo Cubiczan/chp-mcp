@@ -3,7 +3,9 @@
 [![icohangar-ops/cubiczan-chp-mcp MCP server](https://glama.ai/mcp/servers/icohangar-ops/cubiczan-chp-mcp/badges/score.svg)](https://glama.ai/mcp/servers/icohangar-ops/cubiczan-chp-mcp)
 
 
-One-command MCP install for **CHP Profile B** spend / capital gates.
+One-command MCP install for **CHP Profile B** spend / capital gates and
+**tool-approval receipts** (an allowlist is not authorization), plus a
+**structured deny ledger** and receipt-gated finance tools.
 
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.icohangar--ops%2Fchp--mcp-00C4B4)](https://registry.modelcontextprotocol.io)
 [![npm](https://img.shields.io/npm/v/@cubiczan/chp-mcp)](https://www.npmjs.com/package/@cubiczan/chp-mcp)
@@ -24,7 +26,10 @@ MCP client (Cursor / Claude / …)
 │  MCP server (transport)   │  ← you are here (@cubiczan/chp-mcp)
 │  evaluate_spend_gate      │
 │  approve_spend            │
-│  request_authorization    │
+│  evaluate_tool_approval   │  allowlist ≠ authorization
+│  issue_approval_receipt   │
+│  authorize_tool_call      │
+│  request_authorization    │  finance-tool receipt / HITL / deny
 │  place_equity_order       │  scoped + receipt-gated (synthetic)
 │  wire_treasury_transfer   │
 │  rebalance_portfolio      │
@@ -76,13 +81,16 @@ claude mcp add chp -- npx -y @cubiczan/chp-mcp
 |------|---------|---------|
 | `evaluate_spend_gate` | `evaluateGate` | LOCKED / HITL_REQUIRED / BLOCKED + claims + content hash. `BLOCKED` is also a ledgered `policy_deny`. |
 | `approve_spend` | `approveHuman` | Human lock when HITL_REQUIRED (cannot override hard fails). Optional `tool` + `bound_args` mint a signed receipt. |
+| `evaluate_tool_approval` | `evaluateToolApproval` | Allowlist is a pre-filter; a bound receipt is still required |
+| `issue_approval_receipt` | `issueApprovalReceipt` | Human allow/deny → HMAC-signed receipt + decision log |
+| `authorize_tool_call` | `authorizeToolCall` | Consume a receipt; deny on drift, expiry, replay, or a bad MAC |
 | `request_authorization` | runtime | Mint a receipt bound to a scoped reference tool, or return HITL / structured deny |
 | `place_equity_order` | reference | Synthetic equity order — scope `trading:equities:place`, receipt required |
 | `wire_treasury_transfer` | reference | Synthetic treasury wire — scope `treasury:wire`, always HITL |
 | `rebalance_portfolio` | reference | Synthetic rebalance — scope `portfolio:rebalance` |
 | `inspect_audit_ledger` | ledger | Trailing CHP-chained deny / authorize / execute entries |
 | `chp_content_hash` | `contentHash` | Float-aware canonical SHA-256 |
-| `chp_version` | — | Server + protocol versions + deny reason codes |
+| `chp_version` | — | Server + protocol versions + deny reason codes + receipt schema |
 
 ### Example — evaluate a spend
 
@@ -100,11 +108,137 @@ claude mcp add chp -- npx -y @cubiczan/chp-mcp
 }
 ```
 
+## Cookbook — Claude / Cursor tool approval
+
+Managed MCP allowlists (Cursor `mcpServers`, Claude Desktop, Claude Code)
+only answer *“is this tool name installed?”*. They do not bind tenant,
+arguments, risk, or a human decision. This server treats that gap as a
+hard deny unless a signed **approval receipt** still matches the call
+that is about to run.
+
+Receipts are HMAC-SHA256 over [CHP canonical JSON](https://www.npmjs.com/package/@cubiczan/chp)
+(the same payload discipline as Profile B `contentHash` / audit-ledger
+`sig`). The MAC covers:
+
+| Field | Role |
+|-------|------|
+| `actor` | Human who allowed or denied |
+| `tool` | Concrete tool name (no `*`) |
+| `resource` | Tenant / resource binding (no `*`) |
+| `args_hash` | `contentHash(arguments, { floatAware: true })` |
+| `policy_version` | Policy the human saw |
+| `risk` | Policy risk for that tool |
+| `issued_at` / `expiry` | Lifetime |
+| `decision` | `allow` or `deny` |
+| `nonce` | Single-use; replay denies |
+| `signature` | HMAC-SHA256 hex |
+
+Set `CHP_RECEIPT_KEY` (or `AUDIT_LEDGER_KEY`) in the MCP server env.
+Without it the process falls back to a documented insecure default —
+fine for the local cookbook, not for production.
+
+Example policy: [`examples/tool-approval-policy.json`](examples/tool-approval-policy.json).
+`stripe.create_charge` is **on the allowlist** and still cannot run
+without a receipt bound to `acct_live_acme` and the exact charge args.
+
+```json
+{
+  "mcpServers": {
+    "chp": {
+      "command": "npx",
+      "args": ["-y", "@cubiczan/chp-mcp"],
+      "env": { "CHP_RECEIPT_KEY": "replace-me" }
+    }
+  }
+}
+```
+
+### 1. Allowlist alone — denied
+
+Claude/Cursor has `stripe.create_charge` enabled. That is not a grant.
+
+```jsonc
+// tools/call evaluate_tool_approval
+{
+  "call": {
+    "tool": "stripe.create_charge",
+    "resource": "acct_live_acme",
+    "arguments": { "amount": 2500, "currency": "usd", "customer": "cus_123" }
+  },
+  "policy": { "$ref": "examples/tool-approval-policy.json" }
+}
+```
+
+Result: `RECEIPT_REQUIRED`, `deny_code: "allowlist_is_not_authorization"`.
+
+Calling `authorize_tool_call` with the same payload and **no receipt**
+returns `DENIED` / `allowlist_is_not_authorization`.
+
+### 2. Human allow — then authorize
+
+```jsonc
+// tools/call issue_approval_receipt
+{
+  "actor": "cfo@acme.example",
+  "decision": "allow",
+  "reason": "invoice INV-104 matches amount",
+  "ttl_seconds": 120,
+  "call": { /* same as above */ },
+  "policy": { /* same as above */ }
+}
+```
+
+The response includes `receipt` (take the whole object) and
+`decision_log` (actor, decision, args hash, nonce). Pass that receipt
+into `authorize_tool_call` with the **same** call. Result: `AUTHORIZED`.
+
+### 3. Human deny
+
+Issue with `"decision": "deny"`. The decision is logged. Authorizing
+with that receipt returns `DENIED` / `human_denied`. A deny receipt
+cannot be flipped to allow by editing `decision` — the MAC breaks.
+
+### 4. Changed arguments after approval — denied
+
+Approve `{ "amount": 2500, ... }`, then authorize with
+`{ "amount": 2500000, ... }`. Result: `DENIED` / `changed_arguments`.
+Key order does not matter; the hash is CHP canonical. The original
+receipt remains valid for the args that were approved (until expiry or
+a successful consume).
+
+### 5. Expired receipt — denied
+
+Issue with `ttl_seconds: 30`. After the expiry instant,
+`authorize_tool_call` returns `DENIED` / `expired_receipt`. The nonce is
+consumed so a clock rewind cannot resurrect it.
+
+### 6. Replayed receipt — denied
+
+A successful `AUTHORIZED` consume burns the nonce. Presenting the same
+receipt again returns `DENIED` / `replayed_receipt`.
+
+### 7. Ambiguity — denied
+
+These never produce a usable allow receipt:
+
+- `resource: "*"`, `any`, `all`, or an empty string
+- missing `arguments`
+- policy without a concrete `version`
+- actor / tool wildcards
+- extra keys on a receipt (strict parse)
+
+Fail-closed: `deny_on_ambiguity` cannot be turned off.
+
 ## Cookbook — deny telemetry and receipts
 
 MCP denials are usually a bare error string. That string is gone when the
 client disconnects. This server treats a refuse as a **structured event**
 that must hit a CHP-signed ledger *before* the caller sees it.
+
+Finance tools (`place_equity_order`, `wire_treasury_transfer`,
+`rebalance_portfolio`) are synthetic — no live venue or bank rail — and
+use a separate `kind: "authorization"` receipt bound to tool, scope, and
+args hash. That is not the same object as a `chp.tool_approval_receipt`.
 
 ### Reason codes
 
@@ -184,9 +318,13 @@ Each row carries `content_hash` and `sig = chainHash(prev_sig, { seq, ts, event,
 npm test
 ```
 
-Invariants covered: an unlogged deny is impossible (ledger failure
-throws instead of returning a deny object); changed args after approve
-deny; a receipt is required for every gated reference tool.
+This Cubiczan mirror may omit GitHub Actions; run the suite locally.
+`npm test` builds, then runs `node --test dist/*.test.js` (approval
+receipts) and `node --import tsx --test test/**/*.test.ts` (deny
+ledger). Invariants covered: an unlogged deny is impossible (ledger
+failure throws instead of returning a deny object); changed args after
+approve deny; a receipt is required for every gated reference tool;
+allowlist is not authorization.
 
 ## Related
 

@@ -2,9 +2,10 @@
 
 ## Purpose
 
-MCP transport for CHP Profile B spend / capital gates. The server wraps
-`@cubiczan/chp` so clients can evaluate and approve high-consequence
-actions without vendoring protocol code.
+MCP transport for CHP Profile B spend / capital gates, HMAC tool-approval
+receipts (allowlist is not authorization), and a structured deny ledger.
+The server wraps `@cubiczan/chp` so clients can evaluate and approve
+high-consequence actions without vendoring protocol code.
 
 ## Conventions
 
